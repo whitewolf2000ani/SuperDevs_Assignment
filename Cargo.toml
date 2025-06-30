@@ -1,0 +1,17 @@
+[package]
+name = "super-devs-assign"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = "0.8.4"
+bs58 = "0.5.1"
+serde_json = "1.0.140"
+solana-sdk = "2.3.1"
+tokio = { version = "1.45.1", features = ["full"] }
+base64 = "0.21.7"                # For base64 encoding
+serde = { version = "1.0", features = ["derive"] } # For JSON serialization
+spl-token = { version = "7.0.0", features = ["no-entrypoint"] } # For token operations
+spl-associated-token-account = "7.0.0" # For associated token accounts
+validator = "0.18.1"   
+validator_derive = "0.18"
