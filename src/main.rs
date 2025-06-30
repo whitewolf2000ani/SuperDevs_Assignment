@@ -22,7 +22,7 @@ use tokio::net::TcpListener;
 use validator::Validate;
 use validator_derive::Validate;
 
-
+// --- State and Data Structures ---
 
 #[derive(Clone)]
 struct AppState {
@@ -48,7 +48,6 @@ struct CreateTokenRequest {
     decimals: u8,
 }
 
-// Add these after your existing structs
 #[derive(Deserialize, Validate)]
 struct MintTokenRequest {
     mint: String,
@@ -85,6 +84,8 @@ struct SendTokenRequest {
     amount: u64,
 }
 
+// --- Response Helper Structs ---
+
 #[derive(Serialize)]
 struct InstructionResponse {
     program_id: String,
@@ -99,6 +100,7 @@ struct AccountResponse {
     is_writable: bool,
 }
 
+// --- Router Setup ---
 
 fn create_router(state: AppState) -> Router {
     Router::new()
@@ -112,10 +114,10 @@ fn create_router(state: AppState) -> Router {
         .with_state(state)
 }
 
+// --- Endpoint Implementations ---
 
 async fn generate_keypair() -> impl IntoResponse {
     let keypair = Keypair::new();
-    
     Json(json!({
         "success": true,
         "data": {
@@ -129,40 +131,26 @@ async fn create_token(
     State(state): State<AppState>,
     Json(payload): Json<CreateTokenRequest>,
 ) -> impl IntoResponse {
-    // Validate input
     if let Err(e) = payload.validate() {
-        return Json(json!({
-            "success": false,
-            "error": format!("Validation error: {}", e)
-        }));
+        return Json(json!({ "success": false, "error": format!("Validation error: {}", e) }));
     }
 
-    // Parse public keys
     let mint = match Pubkey::from_str(&payload.mint) {
         Ok(pk) => pk,
-        Err(_) => return Json(json!({
-            "success": false,
-            "error": "Invalid mint address"
-        })),
+        Err(_) => return Json(json!({ "success": false, "error": "Invalid mint address" })),
     };
-
     let mint_authority = match Pubkey::from_str(&payload.mint_authority) {
         Ok(pk) => pk,
-        Err(_) => return Json(json!({
-            "success": false,
-            "error": "Invalid mint authority"
-        })),
+        Err(_) => return Json(json!({ "success": false, "error": "Invalid mint authority" })),
     };
 
-    // Create initialize mint instruction
     let instruction = token_instruction::initialize_mint(
         &state.token_program_id,
         &mint,
         &mint_authority,
         None,
         payload.decimals,
-    )
-    .unwrap();
+    ).unwrap();
 
     Json(json!({
         "success": true,
@@ -182,32 +170,19 @@ async fn mint_token(
     State(state): State<AppState>,
     Json(payload): Json<MintTokenRequest>,
 ) -> impl IntoResponse {
-    // Parse public keys
     let mint = match Pubkey::from_str(&payload.mint) {
         Ok(pk) => pk,
-        Err(_) => return Json(json!({
-            "success": false,
-            "error": "Invalid mint address"
-        })),
+        Err(_) => return Json(json!({ "success": false, "error": "Invalid mint address" })),
     };
-
     let destination = match Pubkey::from_str(&payload.destination) {
         Ok(pk) => pk,
-        Err(_) => return Json(json!({
-            "success": false,
-            "error": "Invalid destination address"
-        })),
+        Err(_) => return Json(json!({ "success": false, "error": "Invalid destination address" })),
     };
-
     let authority = match Pubkey::from_str(&payload.authority) {
         Ok(pk) => pk,
-        Err(_) => return Json(json!({
-            "success": false,
-            "error": "Invalid authority address"
-        })),
+        Err(_) => return Json(json!({ "success": false, "error": "Invalid authority address" })),
     };
 
-    // Create mint to instruction
     let instruction = token_instruction::mint_to(
         &state.token_program_id,
         &mint,
@@ -215,8 +190,7 @@ async fn mint_token(
         &authority,
         &[],
         payload.amount,
-    )
-    .unwrap();
+    ).unwrap();
 
     Json(json!({
         "success": true,
@@ -233,25 +207,16 @@ async fn mint_token(
 }
 
 async fn sign_message(Json(payload): Json<SignMessageRequest>) -> impl IntoResponse {
-    // Decode secret key from base58
     let secret_bytes = match bs58::decode(&payload.secret).into_vec() {
         Ok(bytes) => bytes,
-        Err(_) => return Json(json!({
-            "success": false,
-            "error": "Invalid secret key format"
-        })),
+        Err(_) => return Json(json!({ "success": false, "error": "Invalid secret key format" })),
     };
 
-    // Create keypair from secret bytes
     let keypair = match Keypair::from_bytes(&secret_bytes) {
         Ok(kp) => kp,
-        Err(_) => return Json(json!({
-            "success": false,
-            "error": "Invalid secret key"
-        })),
+        Err(_) => return Json(json!({ "success": false, "error": "Invalid secret key" })),
     };
 
-    // Sign the message
     let signature = keypair.sign_message(payload.message.as_bytes());
 
     Json(json!({
@@ -265,34 +230,21 @@ async fn sign_message(Json(payload): Json<SignMessageRequest>) -> impl IntoRespo
 }
 
 async fn verify_message(Json(payload): Json<VerifyMessageRequest>) -> impl IntoResponse {
-    // Parse public key
     let pubkey = match Pubkey::from_str(&payload.pubkey) {
         Ok(pk) => pk,
-        Err(_) => return Json(json!({
-            "success": false,
-            "error": "Invalid public key"
-        })),
+        Err(_) => return Json(json!({ "success": false, "error": "Invalid public key" })),
     };
 
-    // Decode signature from base64
     let signature_bytes = match general_purpose::STANDARD.decode(&payload.signature) {
         Ok(bytes) => bytes,
-        Err(_) => return Json(json!({
-            "success": false,
-            "error": "Invalid signature format"
-        })),
+        Err(_) => return Json(json!({ "success": false, "error": "Invalid signature format" })),
     };
 
-    // Create signature object
     let signature = match Signature::try_from(signature_bytes.as_slice()) {
         Ok(sig) => sig,
-        Err(_) => return Json(json!({
-            "success": false,
-            "error": "Invalid signature"
-        })),
+        Err(_) => return Json(json!({ "success": false, "error": "Invalid signature" })),
     };
 
-    // Verify signature
     let is_valid = signature.verify(pubkey.as_ref(), payload.message.as_bytes());
 
     Json(json!({
@@ -306,45 +258,28 @@ async fn verify_message(Json(payload): Json<VerifyMessageRequest>) -> impl IntoR
 }
 
 async fn send_sol(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     Json(payload): Json<SendSolRequest>,
 ) -> impl IntoResponse {
-    // Parse public keys
     let from = match Pubkey::from_str(&payload.from) {
         Ok(pk) => pk,
-        Err(_) => return Json(json!({
-            "success": false,
-            "error": "Invalid from address"
-        })),
+        Err(_) => return Json(json!({ "success": false, "error": "Invalid from address" })),
     };
-
     let to = match Pubkey::from_str(&payload.to) {
         Ok(pk) => pk,
-        Err(_) => return Json(json!({
-            "success": false,
-            "error": "Invalid to address"
-        })),
+        Err(_) => return Json(json!({ "success": false, "error": "Invalid to address" })),
     };
-
-    // Validate lamports amount
     if payload.lamports == 0 {
-        return Json(json!({
-            "success": false,
-            "error": "Invalid lamports amount"
-        }));
+        return Json(json!({ "success": false, "error": "Invalid lamports amount" }));
     }
 
-    // Create transfer instruction
     let instruction = system_instruction::transfer(&from, &to, payload.lamports);
 
     Json(json!({
         "success": true,
         "data": {
             "program_id": instruction.program_id.to_string(),
-            "accounts": [
-                from.to_string(),
-                to.to_string()
-            ],
+            "accounts": [from.to_string(), to.to_string()],
             "instruction_data": general_purpose::STANDARD.encode(&instruction.data)
         }
     }))
@@ -354,36 +289,22 @@ async fn send_token(
     State(state): State<AppState>,
     Json(payload): Json<SendTokenRequest>,
 ) -> impl IntoResponse {
-    // Parse public keys
     let destination = match Pubkey::from_str(&payload.destination) {
         Ok(pk) => pk,
-        Err(_) => return Json(json!({
-            "success": false,
-            "error": "Invalid destination address"
-        })),
+        Err(_) => return Json(json!({ "success": false, "error": "Invalid destination address" })),
     };
-
     let mint = match Pubkey::from_str(&payload.mint) {
         Ok(pk) => pk,
-        Err(_) => return Json(json!({
-            "success": false,
-            "error": "Invalid mint address"
-        })),
+        Err(_) => return Json(json!({ "success": false, "error": "Invalid mint address" })),
     };
-
     let owner = match Pubkey::from_str(&payload.owner) {
         Ok(pk) => pk,
-        Err(_) => return Json(json!({
-            "success": false,
-            "error": "Invalid owner address"
-        })),
+        Err(_) => return Json(json!({ "success": false, "error": "Invalid owner address" })),
     };
 
-    // Get associated token addresses
     let source = get_associated_token_address(&owner, &mint);
     let dest_token_account = get_associated_token_address(&destination, &mint);
 
-    // Create transfer instruction
     let instruction = token_instruction::transfer(
         &state.token_program_id,
         &source,
@@ -391,8 +312,7 @@ async fn send_token(
         &owner,
         &[],
         payload.amount,
-    )
-    .unwrap();
+    ).unwrap();
 
     Json(json!({
         "success": true,
@@ -407,6 +327,7 @@ async fn send_token(
     }))
 }
 
+// --- Main Entrypoint ---
 
 #[tokio::main]
 async fn main() {
